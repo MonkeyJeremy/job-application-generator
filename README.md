@@ -30,11 +30,17 @@ Create a `.env` file in the project root:
 ANTHROPIC_API_KEY=your-api-key-here
 ```
 
-### 3. Update the resume
+### 3. Add your resume
 
-Edit `resume_context.py` with your own resume content, and update `CANDIDATE_NAME`, `CANDIDATE_EMAIL`, and `CANDIDATE_PHONE`.
+```bash
+cp resume_context.example.py resume_context.py
+```
 
-Also update the resume block inside `.claude/commands/apply.md` so the `/apply` skill always has your latest resume in context.
+Edit `resume_context.py` with your name, contact info, and full resume text.
+This file is **gitignored** — it will never be committed.
+
+Also paste your resume into the `## Your Resume` section of `.claude/commands/apply.md`
+(your local copy at `~/.claude/commands/apply.md`) so the `/apply` skill always has it in context.
 
 ### 4. Install the Claude Code skill
 
