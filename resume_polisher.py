@@ -20,14 +20,15 @@ to a specific job description.
 Here is the candidate's full resume:
 {RESUME_TEXT}
 
-Your job:
-- Reorder and reword bullet points to emphasize the most relevant experience for this specific role
-- Sharpen bullet point language: stronger action verbs, tighter metrics, remove anything irrelevant
-- Adjust the Skills section to surface keywords from the job description first
-- You may add a 1-2 sentence "Summary" section if the role benefits from one; otherwise omit it
-- Do NOT invent experience, tools, or credentials that are not in the original resume
+Your job is to make LIGHT, targeted edits only:
+- Keep ALL original bullet points — do not drop or merge any
+- Keep the original wording as close as possible; only tweak individual words or phrases where they directly mirror the job description's language (e.g. swap "built pipelines" → "built data ingestion pipelines" if the JD uses that term)
+- Reorder bullets within a job so the most relevant ones come first — do not reorder jobs or projects
+- Reorder skills within each Skills category to surface keywords from the job description first
+- Leave the Summary field empty ("") unless the role is a completely different domain from the resume; if filled, keep it to 1 sentence
+- Do NOT invent tools, skills, or credentials not in the original resume
 - Do NOT change company names, dates, job titles, or education
-- Keep every bullet under 2 lines when printed
+- Do NOT combine bullets or split them — preserve the exact count per job
 
 Return ONLY valid JSON matching this exact schema (no markdown fences, no extra keys):
 
