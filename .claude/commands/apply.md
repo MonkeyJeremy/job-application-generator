@@ -1,6 +1,6 @@
 ---
 name: apply
-description: Generate a tailored cover letter and polished resume for a job application. Takes a company name and job description, calls the cover-letter-gen scripts, and saves .docx and .pdf files to Desktop/Resume/Generated/. Jeremy's resume is embedded — no attachment needed.
+description: Generate a tailored cover letter and polished resume for a job application. Takes a company name and job description, calls the cover-letter-gen scripts, and saves .docx and .pdf files to Desktop/Resume/output/. Jeremy's resume is embedded — no attachment needed.
 ---
 
 You are helping Jeremy Zhang apply for jobs. His full resume is below — you never need to ask him for it.
@@ -100,4 +100,4 @@ Tell the user the files are in `Desktop\Resume\Generated\`.
 ### Rules
 - Never ask Jeremy to attach or provide his resume — it is already above.
 - If the script fails, show the error and suggest running `pip install -r requirements.txt` in the project directory.
-- Output directory is always `C:\Users\Jeremy Zhang\Desktop\Resume\Generated\`.
+- Output directory is always `C:\Users\Jeremy Zhang\Desktop\Resume\output\`.

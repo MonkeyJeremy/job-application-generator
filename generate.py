@@ -12,7 +12,7 @@ import sys
 from pathlib import Path
 
 # Output directory: Desktop/Resume/Generated
-OUTPUT_DIR = Path.home() / "Desktop" / "Resume" / "Generated"
+OUTPUT_DIR = Path.home() / "Desktop" / "Resume" / "output"
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 from generator import generate_cover_letter, TONES
