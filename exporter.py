@@ -4,35 +4,30 @@ import tempfile
 from datetime import date
 
 from docx import Document
-from docx.shared import Pt, Inches, RGBColor
+from docx.shared import Pt, Inches
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 
 from resume_context import CANDIDATE_NAME, CANDIDATE_EMAIL, CANDIDATE_PHONE
 
 
-def _set_font(run, name="Calibri", size=11, bold=False, color=None):
-    run.font.name = name
+def _p(doc, text, size=11, bold=False, space_after=0, align=WD_ALIGN_PARAGRAPH.LEFT):
+    para = doc.add_paragraph()
+    para.alignment = align
+    para.paragraph_format.space_before = Pt(0)
+    para.paragraph_format.space_after = Pt(space_after)
+    run = para.add_run(text)
+    run.font.name = "Calibri"
     run.font.size = Pt(size)
     run.font.bold = bold
-    if color:
-        run.font.color.rgb = RGBColor(*color)
-
-
-def _add_paragraph(doc, text, align=WD_ALIGN_PARAGRAPH.LEFT, space_after=6):
-    p = doc.add_paragraph()
-    p.alignment = align
-    p.paragraph_format.space_after = Pt(space_after)
-    p.paragraph_format.space_before = Pt(0)
-    return p, p.add_run(text)
+    return para
 
 
 def to_docx(letter_body: str, company: str = "") -> bytes:
     doc = Document()
 
-    # Margins: 0.75" top/bottom, 1" left/right — tight but professional
     for section in doc.sections:
-        section.top_margin = Inches(0.75)
-        section.bottom_margin = Inches(0.75)
+        section.top_margin = Inches(1)
+        section.bottom_margin = Inches(1)
         section.left_margin = Inches(1)
         section.right_margin = Inches(1)
 
@@ -40,37 +35,45 @@ def to_docx(letter_body: str, company: str = "") -> bytes:
     style.font.name = "Calibri"
     style.font.size = Pt(11)
 
-    # Header: name
-    p, run = _add_paragraph(doc, CANDIDATE_NAME, WD_ALIGN_PARAGRAPH.CENTER, space_after=2)
-    _set_font(run, size=14, bold=True)
+    # ── Header ────────────────────────────────────────────────────────────
+    _p(doc, CANDIDATE_NAME, size=14, bold=True, space_after=0,
+       align=WD_ALIGN_PARAGRAPH.CENTER)
+    _p(doc, f"{CANDIDATE_PHONE} | {CANDIDATE_EMAIL}", size=11, space_after=18,
+       align=WD_ALIGN_PARAGRAPH.CENTER)
 
-    # Header: contact
-    p, run = _add_paragraph(
-        doc,
-        f"{CANDIDATE_PHONE} | {CANDIDATE_EMAIL}",
-        WD_ALIGN_PARAGRAPH.CENTER,
-        space_after=8,
-    )
-    _set_font(run, size=11)
+    # ── Date ──────────────────────────────────────────────────────────────
+    today = date.today().strftime("%B %#d, %Y") if os.name == "nt" else date.today().strftime("%B %-d, %Y")
+    _p(doc, today, space_after=12)
 
-    # Date
-    today = date.today().strftime("%B %-d, %Y") if os.name != "nt" else date.today().strftime("%B %#d, %Y")
-    p, run = _add_paragraph(doc, today, space_after=6)
-    _set_font(run, size=11)
-
-    # Recipient block
+    # ── Recipient ─────────────────────────────────────────────────────────
     if company:
-        p, run = _add_paragraph(doc, "Hiring Team", space_after=0)
-        _set_font(run, size=11)
-        p, run = _add_paragraph(doc, company, space_after=8)
-        _set_font(run, size=11)
+        _p(doc, "Hiring Team", space_after=0)
+        _p(doc, company, space_after=18)
 
-    # Letter body — split on blank lines into paragraphs
-    paragraphs = [p.strip() for p in letter_body.split("\n\n") if p.strip()]
-    for i, para_text in enumerate(paragraphs):
-        space = 8 if i < len(paragraphs) - 1 else 0
-        p, run = _add_paragraph(doc, para_text, space_after=space)
-        _set_font(run, size=11)
+    # ── Body ──────────────────────────────────────────────────────────────
+    # Split off the closing block ("Sincerely," onward) from the body
+    closing_marker = None
+    for marker in ("Sincerely,", "Best regards,", "Best,", "Regards,"):
+        if marker in letter_body:
+            closing_marker = marker
+            break
+
+    if closing_marker:
+        body_part, closing_part = letter_body.split(closing_marker, 1)
+    else:
+        body_part = letter_body
+        closing_part = ""
+
+    body_paras = [p.strip() for p in body_part.split("\n\n") if p.strip()]
+    for i, text in enumerate(body_paras):
+        # Last body paragraph gets extra space before the closing
+        space = 18 if i == len(body_paras) - 1 else 12
+        _p(doc, text, space_after=space)
+
+    # ── Closing ───────────────────────────────────────────────────────────
+    _p(doc, closing_marker or "Sincerely,", space_after=0)
+    _p(doc, "", space_after=12)   # blank line between closing and name
+    _p(doc, CANDIDATE_NAME, space_after=0)
 
     buf = io.BytesIO()
     doc.save(buf)
@@ -79,7 +82,7 @@ def to_docx(letter_body: str, company: str = "") -> bytes:
 
 def to_pdf(docx_bytes: bytes) -> bytes | None:
     try:
-        from docx2pdf import convert  # noqa: PLC0415
+        from docx2pdf import convert
     except ImportError:
         return None
 

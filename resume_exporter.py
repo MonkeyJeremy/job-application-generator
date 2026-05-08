@@ -1,156 +1,172 @@
 """
-Renders a structured resume dict (from resume_polisher.py) into a
-professionally formatted .docx, then optionally converts to .pdf.
-Matches the clean two-column style of Jeremy's original resume.
+Renders a structured resume dict into a .docx matching Jeremy's reference format:
+- Times New Roman throughout
+- 0.40" L/R margins, 0.457" T/B margins
+- Justified alignment
+- No explicit paragraph spacing (Word defaults = 0 before/after, single line)
+- Hanging indent 0.158" for bullets and skills
+- Bottom border (sz=4) on section headers
 """
 import io
+import os
+import tempfile
 
 from docx import Document
-from docx.shared import Pt, Inches, RGBColor
-from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.shared import Pt, Inches
+from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_LINE_SPACING
 from docx.oxml.ns import qn
 from docx.oxml import OxmlElement
 
 from resume_context import CANDIDATE_NAME, CANDIDATE_EMAIL, CANDIDATE_PHONE
 
-# ── Helpers ────────────────────────────────────────────────────────────────
-
-def _para(doc, space_before=0, space_after=2):
-    p = doc.add_paragraph()
-    p.paragraph_format.space_before = Pt(space_before)
-    p.paragraph_format.space_after = Pt(space_after)
-    return p
+FONT = "Times New Roman"
+CONTENT_WIDTH_TWIPS = 11088  # 8.5" - 0.4" - 0.4" = 7.7" × 1440
 
 
-def _run(para, text, bold=False, size=10, font="Calibri", color=None, italic=False):
+def _add_run(para, text, bold=False, italic=False, size=10):
     r = para.add_run(text)
-    r.font.name = font
+    r.font.name = FONT
     r.font.size = Pt(size)
     r.font.bold = bold
     r.font.italic = italic
-    if color:
-        r.font.color.rgb = RGBColor(*color)
     return r
 
 
-def _section_header(doc, title):
-    """Bold section title with a bottom border line."""
-    p = _para(doc, space_before=5, space_after=1)
-    _run(p, title, bold=True, size=10.5)
-    # Add bottom border to the paragraph
-    pPr = p._p.get_or_add_pPr()
-    pBdr = OxmlElement("w:pBdr")
-    bottom = OxmlElement("w:bottom")
-    bottom.set(qn("w:val"), "single")
-    bottom.set(qn("w:sz"), "6")
-    bottom.set(qn("w:space"), "1")
-    bottom.set(qn("w:color"), "000000")
-    pBdr.append(bottom)
-    pPr.append(pBdr)
+def _para(doc, align=WD_ALIGN_PARAGRAPH.JUSTIFY):
+    p = doc.add_paragraph()
+    p.alignment = align
+    # No explicit spacing — inherits from Normal (0/0/single)
     return p
 
 
-def _two_col_row(doc, left, right, left_bold=False, right_bold=False,
-                 left_italic=False, right_italic=False, size=10.5):
-    """Single paragraph: left text + right-aligned text via tab stop."""
-    p = _para(doc, space_before=0, space_after=0)
-    # Set right tab stop at the right margin (7" content width = 10080 twips)
-    from docx.oxml import OxmlElement
-    from docx.oxml.ns import qn
+def _add_border(para):
+    """Adds bottom border to a paragraph (matching reference sz=4)."""
+    pPr = para._p.get_or_add_pPr()
+    pBdr = OxmlElement("w:pBdr")
+    bottom = OxmlElement("w:bottom")
+    bottom.set(qn("w:val"), "single")
+    bottom.set(qn("w:sz"), "4")
+    bottom.set(qn("w:space"), "1")
+    bottom.set(qn("w:color"), "auto")
+    pBdr.append(bottom)
+    pPr.append(pBdr)
+
+
+def _section_header(doc, title):
+    p = _para(doc)
+    _add_run(p, title, bold=True, size=11)
+    _add_border(p)
+    return p
+
+
+def _two_col_row(doc, left, right, left_bold=False, left_italic=False):
+    """Company/location or title/dates on one line using a right tab stop."""
+    p = _para(doc)
     pPr = p._p.get_or_add_pPr()
     tabs = OxmlElement("w:tabs")
     tab = OxmlElement("w:tab")
     tab.set(qn("w:val"), "right")
-    tab.set(qn("w:pos"), "10080")
+    tab.set(qn("w:pos"), str(CONTENT_WIDTH_TWIPS))
     tabs.append(tab)
     pPr.append(tabs)
-
-    _run(p, left, bold=left_bold, italic=left_italic, size=size)
-    _run(p, "\t", size=size)
-    _run(p, right, bold=right_bold, italic=right_italic, size=size)
+    _add_run(p, left, bold=left_bold, italic=left_italic)
+    _add_run(p, "\t")
+    _add_run(p, right, italic=left_italic)
     return p
 
 
 def _bullet(doc, text):
-    p = doc.add_paragraph(style="List Bullet")
-    p.paragraph_format.space_before = Pt(0)
-    p.paragraph_format.space_after = Pt(0)
-    p.paragraph_format.left_indent = Inches(0.2)
-    p.paragraph_format.first_line_indent = Inches(-0.15)
-    r = p.add_run(text)
-    r.font.name = "Calibri"
-    r.font.size = Pt(10)
+    p = _para(doc)
+    p.paragraph_format.left_indent = Inches(0.158)
+    p.paragraph_format.first_line_indent = Inches(-0.158)
+    _add_run(p, text)
     return p
 
 
-# ── Main export ────────────────────────────────────────────────────────────
+def _skill_line(doc, category, items):
+    p = _para(doc)
+    p.paragraph_format.left_indent = Inches(0.158)
+    p.paragraph_format.first_line_indent = Inches(-0.158)
+    _add_run(p, f"{category}: ", bold=True)
+    _add_run(p, items)
+    return p
+
 
 def resume_to_docx(data: dict) -> bytes:
     doc = Document()
 
-    # Page: US Letter, compact margins for one-page resume
+    # Margins matching reference
     for section in doc.sections:
-        section.top_margin = Inches(0.6)
-        section.bottom_margin = Inches(0.6)
-        section.left_margin = Inches(0.75)
-        section.right_margin = Inches(0.75)
+        section.top_margin = Inches(0.457)
+        section.bottom_margin = Inches(0.457)
+        section.left_margin = Inches(0.400)
+        section.right_margin = Inches(0.400)
 
-    # Default style
+    # Normal style: Times New Roman 10pt, 0 spacing, single line
     style = doc.styles["Normal"]
-    style.font.name = "Calibri"
+    style.font.name = FONT
     style.font.size = Pt(10)
+    style.paragraph_format.space_before = Pt(0)
+    style.paragraph_format.space_after = Pt(0)
+    style.paragraph_format.line_spacing_rule = WD_LINE_SPACING.SINGLE
 
-    # ── Header ──────────────────────────────────────────────────────────────
-    name_p = _para(doc, space_before=0, space_after=1)
-    name_p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    _run(name_p, CANDIDATE_NAME, bold=True, size=15)
+    # ── Name ──────────────────────────────────────────────────────────────
+    name_p = _para(doc, align=WD_ALIGN_PARAGRAPH.CENTER)
+    name_p.paragraph_format.space_before = Pt(5)
+    r = name_p.add_run(CANDIDATE_NAME)
+    r.font.name = FONT
+    r.font.size = Pt(14)
+    r.font.bold = True
+    # line spacing 1.075× to match reference
+    pPr = name_p._p.get_or_add_pPr()
+    spacing = OxmlElement("w:spacing")
+    spacing.set(qn("w:line"), str(int(1.075 * 240)))  # 240 twips = single
+    spacing.set(qn("w:lineRule"), "auto")
+    pPr.append(spacing)
 
-    contact_p = _para(doc, space_before=0, space_after=4)
-    contact_p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    _run(contact_p, f"{CANDIDATE_PHONE}  |  {CANDIDATE_EMAIL}  |  U.S. Citizen", size=10)
+    # ── Contact ───────────────────────────────────────────────────────────
+    contact_p = _para(doc, align=WD_ALIGN_PARAGRAPH.CENTER)
+    _add_run(contact_p, f"{CANDIDATE_PHONE} | {CANDIDATE_EMAIL} | U.S. Citizen")
 
-    # ── Education (static — never modified) ─────────────────────────────────
+    # ── Education ─────────────────────────────────────────────────────────
     _section_header(doc, "EDUCATION")
-    _two_col_row(doc, "University of California, San Diego", "La Jolla, CA",
-                 left_bold=True, right_bold=False)
+    _two_col_row(doc, "University of California, San Diego", "La Jolla, CA", left_bold=True)
     _two_col_row(doc, "Bachelor of Science in Data Science, Business Minor",
-                 "Sept 2018 – Sept 2024", left_italic=True, right_italic=True, size=10.5)
-    courses_p = _para(doc, space_before=0, space_after=2)
-    _run(courses_p,
-         "Relevant Coursework: Data Analytics, Business Analytics, Strategic Planning, "
-         "Financial Analytics, Risk Assessment, Data Structures & Algorithms, Probability & "
-         "Statistics, Machine Learning & Deep Learning, Data Science, Market Management",
-         italic=True, size=10)
+                 "Sept 2018 – Sept 2024", left_italic=True)
+    p = _para(doc)
+    p.paragraph_format.left_indent = Inches(0.158)
+    p.paragraph_format.first_line_indent = Inches(-0.158)
+    _add_run(p,
+             "Relevant Coursework: Data Analytics, Business Analytics, Strategic Planning, "
+             "Financial Analytics, Risk Assessment, Data Structures & Algorithms, Probability & "
+             "Statistics, Machine Learning & Deep Learning, Data Science, Market Management",
+             italic=True)
 
-    # ── Skills ───────────────────────────────────────────────────────────────
+    # ── Skills ────────────────────────────────────────────────────────────
     _section_header(doc, "SKILLS")
-    skills = data.get("skills", {})
-    for category, items in skills.items():
-        p = _para(doc, space_before=0, space_after=1)
-        _run(p, f"{category}: ", bold=True, size=10)
-        _run(p, items, size=10)
+    for category, items in data.get("skills", {}).items():
+        _skill_line(doc, category, items)
 
-    # ── Summary (optional) ───────────────────────────────────────────────────
+    # ── Summary (optional) ────────────────────────────────────────────────
     summary = data.get("summary", "").strip()
     if summary:
         _section_header(doc, "SUMMARY")
-        p = _para(doc, space_before=0, space_after=4)
-        _run(p, summary, size=10.5)
+        _bullet(doc, summary)
 
-    # ── Professional Experience ──────────────────────────────────────────────
+    # ── Professional Experience ───────────────────────────────────────────
     _section_header(doc, "PROFESSIONAL EXPERIENCE")
     for job in data.get("experience", []):
         _two_col_row(doc, job["company"], job["location"], left_bold=True)
-        _two_col_row(doc, job["title"], job["dates"], left_italic=True, right_italic=True)
-        for bullet in job.get("bullets", []):
-            _bullet(doc, bullet)
+        _two_col_row(doc, job["title"], job["dates"], left_italic=True)
+        for b in job.get("bullets", []):
+            _bullet(doc, b)
 
-    # ── Project Experience ───────────────────────────────────────────────────
+    # ── Project Experience ────────────────────────────────────────────────
     _section_header(doc, "PROJECT EXPERIENCE")
     for proj in data.get("projects", []):
         _two_col_row(doc, proj["name"], proj.get("dates", ""), left_bold=True)
-        for bullet in proj.get("bullets", []):
-            _bullet(doc, bullet)
+        for b in proj.get("bullets", []):
+            _bullet(doc, b)
 
     buf = io.BytesIO()
     doc.save(buf)
@@ -158,7 +174,6 @@ def resume_to_docx(data: dict) -> bytes:
 
 
 def resume_to_pdf(docx_bytes: bytes) -> bytes | None:
-    import os, tempfile
     try:
         from docx2pdf import convert
     except ImportError:
