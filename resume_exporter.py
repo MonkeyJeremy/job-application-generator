@@ -15,14 +15,14 @@ from resume_context import CANDIDATE_NAME, CANDIDATE_EMAIL, CANDIDATE_PHONE
 
 # ── Helpers ────────────────────────────────────────────────────────────────
 
-def _para(doc, space_before=0, space_after=4):
+def _para(doc, space_before=0, space_after=2):
     p = doc.add_paragraph()
     p.paragraph_format.space_before = Pt(space_before)
     p.paragraph_format.space_after = Pt(space_after)
     return p
 
 
-def _run(para, text, bold=False, size=10.5, font="Calibri", color=None, italic=False):
+def _run(para, text, bold=False, size=10, font="Calibri", color=None, italic=False):
     r = para.add_run(text)
     r.font.name = font
     r.font.size = Pt(size)
@@ -35,8 +35,8 @@ def _run(para, text, bold=False, size=10.5, font="Calibri", color=None, italic=F
 
 def _section_header(doc, title):
     """Bold section title with a bottom border line."""
-    p = _para(doc, space_before=8, space_after=2)
-    _run(p, title, bold=True, size=11)
+    p = _para(doc, space_before=5, space_after=1)
+    _run(p, title, bold=True, size=10.5)
     # Add bottom border to the paragraph
     pPr = p._p.get_or_add_pPr()
     pBdr = OxmlElement("w:pBdr")
@@ -53,15 +53,15 @@ def _section_header(doc, title):
 def _two_col_row(doc, left, right, left_bold=False, right_bold=False,
                  left_italic=False, right_italic=False, size=10.5):
     """Single paragraph: left text + right-aligned text via tab stop."""
-    p = _para(doc, space_before=0, space_after=1)
-    # Set right tab stop at the right margin
+    p = _para(doc, space_before=0, space_after=0)
+    # Set right tab stop at the right margin (7" content width = 10080 twips)
     from docx.oxml import OxmlElement
     from docx.oxml.ns import qn
     pPr = p._p.get_or_add_pPr()
     tabs = OxmlElement("w:tabs")
     tab = OxmlElement("w:tab")
     tab.set(qn("w:val"), "right")
-    tab.set(qn("w:pos"), "9360")  # 6.5 inches content width in twips
+    tab.set(qn("w:pos"), "10080")
     tabs.append(tab)
     pPr.append(tabs)
 
@@ -74,12 +74,12 @@ def _two_col_row(doc, left, right, left_bold=False, right_bold=False,
 def _bullet(doc, text):
     p = doc.add_paragraph(style="List Bullet")
     p.paragraph_format.space_before = Pt(0)
-    p.paragraph_format.space_after = Pt(1)
-    p.paragraph_format.left_indent = Inches(0.25)
+    p.paragraph_format.space_after = Pt(0)
+    p.paragraph_format.left_indent = Inches(0.2)
     p.paragraph_format.first_line_indent = Inches(-0.15)
     r = p.add_run(text)
     r.font.name = "Calibri"
-    r.font.size = Pt(10.5)
+    r.font.size = Pt(10)
     return p
 
 
@@ -88,24 +88,24 @@ def _bullet(doc, text):
 def resume_to_docx(data: dict) -> bytes:
     doc = Document()
 
-    # Page: US Letter, 0.75" margins (standard for resumes)
+    # Page: US Letter, compact margins for one-page resume
     for section in doc.sections:
-        section.top_margin = Inches(0.75)
-        section.bottom_margin = Inches(0.75)
-        section.left_margin = Inches(0.9)
-        section.right_margin = Inches(0.9)
+        section.top_margin = Inches(0.6)
+        section.bottom_margin = Inches(0.6)
+        section.left_margin = Inches(0.75)
+        section.right_margin = Inches(0.75)
 
     # Default style
     style = doc.styles["Normal"]
     style.font.name = "Calibri"
-    style.font.size = Pt(10.5)
+    style.font.size = Pt(10)
 
     # ── Header ──────────────────────────────────────────────────────────────
-    name_p = _para(doc, space_before=0, space_after=2)
+    name_p = _para(doc, space_before=0, space_after=1)
     name_p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    _run(name_p, CANDIDATE_NAME, bold=True, size=16)
+    _run(name_p, CANDIDATE_NAME, bold=True, size=15)
 
-    contact_p = _para(doc, space_before=0, space_after=6)
+    contact_p = _para(doc, space_before=0, space_after=4)
     contact_p.alignment = WD_ALIGN_PARAGRAPH.CENTER
     _run(contact_p, f"{CANDIDATE_PHONE}  |  {CANDIDATE_EMAIL}  |  U.S. Citizen", size=10)
 
@@ -115,7 +115,7 @@ def resume_to_docx(data: dict) -> bytes:
                  left_bold=True, right_bold=False)
     _two_col_row(doc, "Bachelor of Science in Data Science, Business Minor",
                  "Sept 2018 – Sept 2024", left_italic=True, right_italic=True, size=10.5)
-    courses_p = _para(doc, space_before=0, space_after=4)
+    courses_p = _para(doc, space_before=0, space_after=2)
     _run(courses_p,
          "Relevant Coursework: Data Analytics, Business Analytics, Strategic Planning, "
          "Financial Analytics, Risk Assessment, Data Structures & Algorithms, Probability & "
@@ -126,9 +126,9 @@ def resume_to_docx(data: dict) -> bytes:
     _section_header(doc, "SKILLS")
     skills = data.get("skills", {})
     for category, items in skills.items():
-        p = _para(doc, space_before=0, space_after=2)
-        _run(p, f"{category}: ", bold=True, size=10.5)
-        _run(p, items, size=10.5)
+        p = _para(doc, space_before=0, space_after=1)
+        _run(p, f"{category}: ", bold=True, size=10)
+        _run(p, items, size=10)
 
     # ── Summary (optional) ───────────────────────────────────────────────────
     summary = data.get("summary", "").strip()

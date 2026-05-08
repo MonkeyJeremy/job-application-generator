@@ -29,14 +29,13 @@ def _add_paragraph(doc, text, align=WD_ALIGN_PARAGRAPH.LEFT, space_after=6):
 def to_docx(letter_body: str, company: str = "") -> bytes:
     doc = Document()
 
-    # Page margins: 1 inch all around
+    # Margins: 0.75" top/bottom, 1" left/right — tight but professional
     for section in doc.sections:
-        section.top_margin = Inches(1)
-        section.bottom_margin = Inches(1)
+        section.top_margin = Inches(0.75)
+        section.bottom_margin = Inches(0.75)
         section.left_margin = Inches(1)
         section.right_margin = Inches(1)
 
-    # Remove default paragraph spacing
     style = doc.styles["Normal"]
     style.font.name = "Calibri"
     style.font.size = Pt(11)
@@ -50,26 +49,26 @@ def to_docx(letter_body: str, company: str = "") -> bytes:
         doc,
         f"{CANDIDATE_PHONE} | {CANDIDATE_EMAIL}",
         WD_ALIGN_PARAGRAPH.CENTER,
-        space_after=14,
+        space_after=8,
     )
     _set_font(run, size=11)
 
     # Date
     today = date.today().strftime("%B %-d, %Y") if os.name != "nt" else date.today().strftime("%B %#d, %Y")
-    p, run = _add_paragraph(doc, today, space_after=10)
+    p, run = _add_paragraph(doc, today, space_after=6)
     _set_font(run, size=11)
 
     # Recipient block
     if company:
         p, run = _add_paragraph(doc, "Hiring Team", space_after=0)
         _set_font(run, size=11)
-        p, run = _add_paragraph(doc, company, space_after=14)
+        p, run = _add_paragraph(doc, company, space_after=8)
         _set_font(run, size=11)
 
     # Letter body — split on blank lines into paragraphs
     paragraphs = [p.strip() for p in letter_body.split("\n\n") if p.strip()]
     for i, para_text in enumerate(paragraphs):
-        space = 10 if i < len(paragraphs) - 1 else 6
+        space = 8 if i < len(paragraphs) - 1 else 0
         p, run = _add_paragraph(doc, para_text, space_after=space)
         _set_font(run, size=11)
 
